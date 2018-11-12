@@ -72,4 +72,40 @@ describe('GET /todos', () => {
       })
       .end(done);
   });
+
+  it('should get a single todo given the ID as a parameter', (done) => {
+    Todo.findOne().then((doc) => {
+      return doc;
+    }).then((doc) => {
+      request(app)
+        .get(`/todos/${doc._id}`)
+        .expect(200)
+        .expect((res) => {
+          expect(res.body._id).toBe(doc._id.toString());
+        })
+        .end(done);
+    }).catch((e) => {done(e)});
+  });
+
+  it('should return 404 when a non-existing id is supplied', (done) => {
+    var id = '000000000000000000000000'
+    request(app)
+      .get(`/todos/${id}`)
+      .expect(404)
+      .expect((res) => {
+        expect(res.body.error).toBe('Id not found');
+      })
+      .end(done);
+  });
+
+  it('should return 404 when an invalid id is supplied', (done) => {
+    var id = '0'
+    request(app)
+      .get(`/todos/${id}`)
+      .expect(404)
+      .expect((res) => {
+        expect(res.body.error).toBe('Invalid Id');
+      })
+      .end(done);
+  })
 });
