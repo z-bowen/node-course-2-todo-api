@@ -1,13 +1,16 @@
 const expect = require('expect');
 const request = require('supertest');
+const {ObjectID} = require('mongodb');
 
 const {app} = require('./../server.js');
 const {Todo} = require('./../models/todo');
 
 const todos = [{
+  _id: new ObjectID(),
   text: 'first test todo'
 },
 {
+  _id: new ObjectID(),
   text: 'second test todo'
 }]
 
@@ -72,19 +75,19 @@ describe('GET /todos', () => {
       })
       .end(done);
   });
+});
 
+describe('GET /todos/:id', () => {
   it('should get a single todo given the ID as a parameter', (done) => {
-    Todo.findOne().then((doc) => {
-      return doc;
-    }).then((doc) => {
-      request(app)
-        .get(`/todos/${doc._id}`)
-        .expect(200)
-        .expect((res) => {
-          expect(res.body._id).toBe(doc._id.toString());
-        })
-        .end(done);
-    }).catch((e) => {done(e)});
+    var hexId = todos[1]._id.toHexString();
+
+    request(app)
+      .get(`/todos/${hexId}`)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.todo._id).toBe(hexId);
+      })
+      .end(done);
   });
 
   it('should return 404 when a non-existing id is supplied', (done) => {
@@ -107,5 +110,51 @@ describe('GET /todos', () => {
         expect(res.body.error).toBe('Invalid Id');
       })
       .end(done);
-  })
+  });
+});
+
+describe('DELETE /todos/:id', () => {
+  it('should remove a todo', (done) => {
+    var hexId = todos[1]._id.toHexString();
+
+    request(app)
+      .delete(`/todos/${hexId}`)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.todo._id).toBe(hexId);
+      })
+    .end((err, res) => {
+      if (err) {
+        return done(err);
+      }
+
+      Todo.findById(hexId).then((todo) => {
+        expect(todo).toNotExist();
+        done();
+      }).catch((e) => done(e));
+    });
+  });
+
+
+  it('should return 404 when a non-existing id is supplied', (done) => {
+    var id = '000000000000000000000000';
+    request(app)
+      .delete(`/todos/${id}`)
+      .expect(404)
+      .expect((res) => {
+        expect(res.body.error).toBe('Id not found');
+      })
+      .end(done);
+  });
+
+  it('should return 404 when an invalid id is supplied', (done) => {
+    var id = '0';
+    request(app)
+      .delete(`/todos/${id}`)
+      .expect(404)
+      .expect((res) => {
+        expect(res.body.error).toBe('Invalid Id');
+      })
+      .end(done);
+  });
 });
