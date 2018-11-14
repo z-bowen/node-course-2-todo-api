@@ -1,6 +1,7 @@
 const expect = require('expect');
 const request = require('supertest');
 const {ObjectID} = require('mongodb');
+const _ = require('lodash');
 
 const {app} = require('./../server.js');
 const {Todo} = require('./../models/todo');
@@ -255,8 +256,7 @@ describe('POST /users', () => {
           expect(user).toExist();
           expect(user.password).toNotBe(password);
           done();
-        });
-
+        }).catch((e) => done(e));
       });
   });
 
@@ -274,5 +274,48 @@ describe('POST /users', () => {
       .send({email: users[0].email, password: 'somePassword'})
       .expect(400)
       .end(done);
+  });
+});
+
+describe('POST /users/login', () => {
+  it('should return a new auth token when valid user credentials are supplied', (done) => {
+    request(app)
+      .post('/users/login')
+      .send(_.pick(users[1], ['email', 'password']))
+      .expect(200)
+      .expect((res) => {
+        expect(res.headers['x-auth']).toExist();
+      })
+      .end((err, res) => {
+        if (err) {
+          return done(err);
+        }
+        User.findById(users[1]._id).then((user) => {
+          expect(user.tokens[0]).toInclude({
+            access: 'auth',
+            token: res.headers['x-auth']
+          });
+          done();
+        }).catch((e) => done(e));
+      });
+  });
+
+  it('should return status 400 when invalid user credentials are supplied', (done) => {
+    request(app)
+      .post('/users/login')
+      .send({email: users[1].email, password: 'badPassword'})
+      .expect(400)
+      .expect((res) => {
+        expect(res.headers['x-auth']).toNotExist();
+      })
+      .end((err, res) => {
+        if (err) {
+          done(err);
+        }
+        User.findById(users[1]._id).then((user) => {
+          expect(user.tokens.length).toBe(0);
+          done();
+        }).catch((e) => done(e));
+      });
   });
 });
