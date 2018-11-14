@@ -16,9 +16,10 @@ var app = express();
 app.use(bodyParser.json());
 
 // POST /todos
-app.post('/todos', (req, res) => {
+app.post('/todos', authenticate, (req, res) => {
   var todo = new Todo({
-    text: req.body.text
+    text: req.body.text,
+    _creator: req.user._id
   });
   todo.save().then((doc) => {
     res.send(doc);
@@ -28,8 +29,12 @@ app.post('/todos', (req, res) => {
 });
 
 // GET /todos
-app.get('/todos', (req, res) => {
-  Todo.find().then((todos) => {
+app.get('/todos', authenticate, (req, res) => {
+  console.log("USER _ID", req.user._id);
+  Todo.find({
+    _creator: req.user._id
+  }).then((todos) => {
+    console.log("TODOS from server.js", todos);
     res.send({todos});
   }, (e) => {
     res.status(400).send(e);
@@ -40,22 +45,16 @@ app.get('/todos', (req, res) => {
 app.get('/todos/:id', (req, res) => {
   var id = req.params.id;
   if (!ObjectID.isValid(id)) {
-    return res.status(404).send({
-      error: 'Invalid Id'
-    });
+    return res.status(404).send();
   }
   Todo.findById(id).then((todo) => {
-    if (todo) {
-      res.send({todo});
-    } else {
-      res.status(404).send({
-        error: 'Id not found'
-      });
+    if (!todo) {
+      return res.status(404).send();
     }
+
+    res.send({todo});
   }).catch((e) => {
-    res.status(400).send({
-      error: e
-    })
+    res.status(400).send();
   });
 });
 
@@ -63,22 +62,17 @@ app.get('/todos/:id', (req, res) => {
 app.delete('/todos/:id', (req, res) => {
   var id = req.params.id;
   if (!ObjectID.isValid(id)) {
-    return res.status(404).send({
-      error: 'Invalid Id'
-    });
+    return res.status(404).send();
   }
+
   Todo.findByIdAndRemove(id).then((todo) => {
-    if (todo) {
-      res.send({todo});
-    } else {
-      res.status(404).send({
-        error: 'Id not found'
-      });
+    if (!todo) {
+      return res.status(404).send();
     }
+
+    res.send({todo});
   }).catch((e) => {
-    res.status(400).send({
-      error: e
-    })
+    res.status(400).send();
   });
 });
 
@@ -88,9 +82,7 @@ app.patch('/todos/:id', (req, res) => {
   var body = _.pick(req.body, ['text', 'completed']);
 
   if (!ObjectID.isValid(id)) {
-    return res.status(404).send({
-      error: 'Invalid Id'
-    });
+    return res.status(404).send();
   }
 
   if (_.isBoolean(body.completed) && body.completed) {
@@ -102,15 +94,13 @@ app.patch('/todos/:id', (req, res) => {
 
   Todo.findByIdAndUpdate(id, {$set: body}, {new: true}).then((todo) => {
     if (!todo) {
-      return res.status(404).send({
-        error: 'Id not found'
-      })
+      return res.status(404).send();
     }
 
     res.send({todo});
   }).catch((e) => {
     res.status(400).send();
-  })
+  });
 });
 
 // POST /users
@@ -123,7 +113,7 @@ app.post('/users', (req, res) => {
   }).then((token) => {
     res.header('x-auth', token).send(user);
   }).catch((e) => {
-    res.status(400).send(e)
+    res.status(400).send(e);
   });
 });
 
@@ -141,7 +131,7 @@ app.post('/users/login', (req, res) => {
         res.header('x-auth', token).send(user);
       });
   }).catch((e) => {
-    return res.status(400).send({error: "Invalid email or password"});
+    return res.status(400).send();
   });
 });
 

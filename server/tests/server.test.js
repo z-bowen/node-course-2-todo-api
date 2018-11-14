@@ -1,9 +1,8 @@
 const expect = require('expect');
 const request = require('supertest');
 const {ObjectID} = require('mongodb');
-const _ = require('lodash');
 
-const {app} = require('./../server.js');
+const {app} = require('./../server');
 const {Todo} = require('./../models/todo');
 const {User} = require('./../models/user');
 const {todos, populateTodos, users, populateUsers} = require('./seed/seed');
@@ -17,12 +16,11 @@ describe('POST /todos', () => {
 
     request(app)
       .post('/todos')
+      .set('x-auth', users[0].tokens[0].token)
       .send({text})
       .expect(200)
       .expect((res) => {
-        expect(res.body.text)
-          .toBeA('string')
-          .toBe(text);
+        expect(res.body.text).toBe(text);
       })
       .end((err, res) => {
         if (err) {
@@ -40,6 +38,7 @@ describe('POST /todos', () => {
   it('should reject invalid data', (done) => {
     request(app)
       .post('/todos')
+      .set('x-auth', users[0].tokens[0].token)
       .send({text: '  '})
       .expect(400)
       .end((err, res) => {
@@ -57,12 +56,14 @@ describe('POST /todos', () => {
 
 describe('GET /todos', () => {
   it('should get the todos from the db', (done) => {
+    console.log("TODOS from seed", todos);
     request(app)
       .get('/todos')
+      .set('x-auth', users[0].tokens[0].token)
       .expect(200)
       .expect((res) => {
-        expect(res.body.todos.length).toBe(2);
-        expect(res.body.todos[0].text).toBe('first test todo');
+        console.log("TODOS FROM TEST", res.body.todos);
+        expect(res.body.todos.length).toBe(1);
       })
       .end(done);
   });
@@ -70,25 +71,23 @@ describe('GET /todos', () => {
 
 describe('GET /todos/:id', () => {
   it('should get a single todo given the ID as a parameter', (done) => {
-    var hexId = todos[1]._id.toHexString();
+    var hexId = todos[0]._id.toHexString();
 
     request(app)
       .get(`/todos/${hexId}`)
       .expect(200)
       .expect((res) => {
-        expect(res.body.todo._id).toBe(hexId);
+        expect(res.body.todo.text).toBe(todos[0].text);
       })
       .end(done);
   });
 
   it('should return 404 when a non-existing id is supplied', (done) => {
-    var id = '000000000000000000000000'
+    var id = new ObjectID().toHexString();
+
     request(app)
       .get(`/todos/${id}`)
       .expect(404)
-      .expect((res) => {
-        expect(res.body.error).toBe('Id not found');
-      })
       .end(done);
   });
 
@@ -97,9 +96,6 @@ describe('GET /todos/:id', () => {
     request(app)
       .get(`/todos/${id}`)
       .expect(404)
-      .expect((res) => {
-        expect(res.body.error).toBe('Invalid Id');
-      })
       .end(done);
   });
 });
@@ -127,13 +123,11 @@ describe('DELETE /todos/:id', () => {
 
 
   it('should return 404 when a non-existing id is supplied', (done) => {
-    var id = '000000000000000000000000';
+    var id = new ObjectID().toHexString();
+
     request(app)
       .delete(`/todos/${id}`)
       .expect(404)
-      .expect((res) => {
-        expect(res.body.error).toBe('Id not found');
-      })
       .end(done);
   });
 
@@ -142,9 +136,6 @@ describe('DELETE /todos/:id', () => {
     request(app)
       .delete(`/todos/${id}`)
       .expect(404)
-      .expect((res) => {
-        expect(res.body.error).toBe('Invalid Id');
-      })
       .end(done);
   });
 });
@@ -152,17 +143,18 @@ describe('DELETE /todos/:id', () => {
 describe('PATCH /todos/:id', () => {
   it('should update an existing todo', (done) => {
     var hexId = todos[0]._id.toHexString();
+    var text = 'New text';
+
     request(app)
       .patch(`/todos/${hexId}`)
-      .send({completed: true})
+      .send({
+        completed: true,
+        text
+      })
       .expect(200)
       .expect((res) => {
-        expect(res.body.todo._id).toBe(hexId);
-      })
-      .expect((res) => {
+        expect(res.body.todo.text).toBe(text);
         expect(res.body.todo.completed).toBe(true);
-      })
-      .expect((res) => {
         expect(res.body.todo.completedAt).toBeA('number');
       })
     .end(done);
@@ -170,17 +162,18 @@ describe('PATCH /todos/:id', () => {
 
   it('should set completedAt to null when completed is false', (done) => {
     var hexId = todos[1]._id.toHexString();
+    var text = 'New text';
+
     request(app)
       .patch(`/todos/${hexId}`)
-      .send({completed: false})
+      .send({
+        completed: false,
+        text
+      })
       .expect(200)
       .expect((res) => {
-        expect(res.body.todo._id).toBe(hexId);
-      })
-      .expect((res) => {
+        expect(res.body.todo.text).toBe(text);
         expect(res.body.todo.completed).toBe(false);
-      })
-      .expect((res) => {
         expect(res.body.todo.completedAt).toNotExist();
       })
     .end(done);
@@ -191,9 +184,6 @@ describe('PATCH /todos/:id', () => {
     request(app)
       .patch(`/todos/${id}`)
       .expect(404)
-      .expect((res) => {
-        expect(res.body.error).toBe('Id not found');
-      })
       .end(done);
   });
 
@@ -202,9 +192,6 @@ describe('PATCH /todos/:id', () => {
     request(app)
       .patch(`/todos/${id}`)
       .expect(404)
-      .expect((res) => {
-        expect(res.body.error).toBe('Invalid Id');
-      })
       .end(done);
   });
 });
@@ -244,7 +231,7 @@ describe('POST /users', () => {
       .expect(200)
       .expect((res) => {
         expect(res.headers['x-auth']).toExist();
-          expect(res.body.email).toExist();
+        expect(res.body._id).toExist();
         expect(res.body.email).toBe(email);
       })
       .end((err) => {
@@ -281,7 +268,10 @@ describe('POST /users/login', () => {
   it('should return a new auth token when valid user credentials are supplied', (done) => {
     request(app)
       .post('/users/login')
-      .send(_.pick(users[1], ['email', 'password']))
+      .send({
+        email: users[1].email,
+        password: users[1].password
+      })
       .expect(200)
       .expect((res) => {
         expect(res.headers['x-auth']).toExist();
